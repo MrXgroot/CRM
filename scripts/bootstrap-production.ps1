@@ -84,21 +84,14 @@ try {
 
     $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($adminPointer)
 
-    # Format password for connection string (handling quotes and semicolons if present)
-    $formattedDbPassword = if ($dbPassword -match '[;=\s"\'']') {
-        '"' + ($dbPassword -replace '"', '""') + '"'
-    } else {
-        $dbPassword
-    }
-
-    # Clean connection string and attach database password
+    # Clean base connection string (ensure no password is in the base string)
     $cleanConn = ($targetConn -replace '(?i)(^|;)\s*password\s*=[^;]*', '').Trim(';')
-    $finalConn = "$cleanConn;Password=$formattedDbPassword;"
 
     $env:Matrika__AdminPassword = $adminPassword
     $env:Matrika__AdminEmail = $AdminEmail
     $env:Production__ExpectedDatabase = $ExpectedDatabase
-    $env:ConnectionStrings__DefaultConnection = $finalConn
+    $env:ConnectionStrings__DefaultConnection = "$cleanConn;"
+    $env:Production__DatabasePassword = $dbPassword
     $env:Matrika__ConfirmProductionBootstrap = "true"
 
     Write-Host "`nInvoking production bootstrap workflow with safety guardrails..." -ForegroundColor Cyan
@@ -116,6 +109,7 @@ finally {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($dbPointer)
     }
     Remove-Item Env:Matrika__AdminPassword -ErrorAction SilentlyContinue
+    Remove-Item Env:Production__DatabasePassword -ErrorAction SilentlyContinue
     Remove-Item Env:Matrika__ConfirmProductionBootstrap -ErrorAction SilentlyContinue
     Remove-Item Env:ConnectionStrings__DefaultConnection -ErrorAction SilentlyContinue
 }

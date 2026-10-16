@@ -23,8 +23,24 @@ public class DbService : IDbService
 
     public DbService(IConfiguration configuration, ILogger<DbService> logger)
     {
-        _connectionString = configuration.GetConnectionString("DefaultConnection")
+        var raw = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+        var dbPassword = configuration["Production:DatabasePassword"]
+            ?? configuration["Matrika:DatabasePassword"]
+            ?? configuration["DB_PASSWORD"];
+
+        if (!string.IsNullOrEmpty(dbPassword))
+        {
+            var builder = new MySqlConnectionStringBuilder(raw);
+            builder.Password = dbPassword;
+            _connectionString = builder.ConnectionString;
+        }
+        else
+        {
+            _connectionString = raw;
+        }
+
         _logger = logger;
     }
 

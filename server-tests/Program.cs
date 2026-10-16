@@ -209,6 +209,39 @@ var allSql = string.Join("\n", sqlFiles.Select(File.ReadAllText));
 bool hasDemoInserts = Regex.IsMatch(allSql, @"INSERT\s+INTO\s+`?crm_(customers|leads|deals|activities)`?", RegexOptions.IgnoreCase);
 Assert(!hasDemoInserts, "Bootstrap: Migrations contain zero demo CRM inserts");
 
+// 13. MySqlConnectionStringBuilder and DbService handle special characters in passwords
+var baseConnStr = "Server=mysql-xxx.aivencloud.com;Port=15000;Database=matrika_crm;User=avnadmin;SslMode=Required;";
+var specialPasswords = new[]
+{
+    @"SimplePass123!",
+    @"Pass;With;Semicolons",
+    @"Pass=With=Equals",
+    @"Pass""With""DoubleQuotes",
+    @"Pass'With'SingleQuotes",
+    @"Pass\With\Backslashes",
+    @"Complex;P@ss=word""with'quotes\and;semi=colons&spaces!#$%"
+};
+
+foreach (var specialPass in specialPasswords)
+{
+    var b = new MySqlConnectionStringBuilder(baseConnStr);
+    b.Password = specialPass;
+    var conn = new MySqlConnection(b.ConnectionString);
+    var roundtrip = new MySqlConnectionStringBuilder(conn.ConnectionString);
+    Assert(roundtrip.Password == specialPass, $"Bootstrap: Connection builder preserves special password: {specialPass.Substring(0, 8)}...");
+
+    var testConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["ConnectionStrings:DefaultConnection"] = baseConnStr,
+        ["Production:DatabasePassword"] = specialPass
+    }).Build();
+
+    var dbSvc = new DbService(testConfig, NullLogger<DbService>.Instance);
+    using var dbConn = dbSvc.CreateConnection();
+    var dbRoundtrip = new MySqlConnectionStringBuilder(dbConn.ConnectionString);
+    Assert(dbRoundtrip.Password == specialPass, $"DbService: Resolves separate password with special characters: {specialPass.Substring(0, 8)}...");
+}
+
 Console.WriteLine($"{passed} checks passed.");
 
 sealed class FakeDb:IDbService

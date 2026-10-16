@@ -88,17 +88,38 @@ public static class ProductionSetup
             // -------------------------------------------------------------
             // GUARD 3: Connection String & Forbidden Database Guards
             // -------------------------------------------------------------
-            var db = services.GetRequiredService<IDbService>();
             var encryption = services.GetRequiredService<IEncryptionService>();
-            var connStr = config.GetConnectionString("DefaultConnection") ?? "";
+            var rawConnStr = config.GetConnectionString("DefaultConnection") ?? "";
 
-            if (Regex.IsMatch(connStr, @"\b(act[-_]base|hms[-_]dev)\b", RegexOptions.IgnoreCase))
+            if (string.IsNullOrWhiteSpace(rawConnStr))
+            {
+                throw new InvalidOperationException("ABORT: Missing connection string 'ConnectionStrings:DefaultConnection'.");
+            }
+
+            if (Regex.IsMatch(rawConnStr, @"\b(act[-_]base|hms[-_]dev)\b", RegexOptions.IgnoreCase))
             {
                 throw new InvalidOperationException(
                     "FATAL SAFETY ABORT: Database connection string points to a protected or forbidden database name. Bootstrap is strictly prohibited from running against this database.");
             }
 
-            await using var conn = db.CreateConnection();
+            var builder = new MySqlConnectionStringBuilder(rawConnStr);
+
+            var dbPassword = config["Production:DatabasePassword"]
+                ?? config["Matrika:DatabasePassword"]
+                ?? config["DB_PASSWORD"];
+
+            if (!string.IsNullOrEmpty(dbPassword))
+            {
+                builder.Password = dbPassword;
+            }
+
+            if (Regex.IsMatch(builder.Database ?? "", @"\b(act[-_]base|hms[-_]dev)\b", RegexOptions.IgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "FATAL SAFETY ABORT: Database connection string points to a protected or forbidden database name. Bootstrap is strictly prohibited from running against this database.");
+            }
+
+            await using var conn = new MySqlConnection(builder.ConnectionString);
             await conn.OpenAsync();
 
             // -------------------------------------------------------------
