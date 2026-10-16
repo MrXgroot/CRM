@@ -8,6 +8,7 @@ using Matrika.Api.Controllers;
 using Matrika.Api.Models;
 using Matrika.Api.Repositories;
 using Matrika.Api.Services;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -241,6 +242,66 @@ foreach (var specialPass in specialPasswords)
     var dbRoundtrip = new MySqlConnectionStringBuilder(dbConn.ConnectionString);
     Assert(dbRoundtrip.Password == specialPass, $"DbService: Resolves separate password with special characters: {specialPass.Substring(0, 8)}...");
 }
+
+// 14. ProductionSetup: Refusal when database password is missing (no password in conn str or env)
+Environment.SetEnvironmentVariable("Production__DatabasePassword", null);
+Environment.SetEnvironmentVariable("Matrika__DatabasePassword", null);
+Environment.SetEnvironmentVariable("DB_PASSWORD", null);
+
+threw = false;
+try {
+    var cNoDbPass = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+        ["Matrika:ConfirmProductionBootstrap"] = "true",
+        ["Matrika:AdminPassword"] = "SuperSecureProdPassword2026!",
+        ["ConnectionStrings:DefaultConnection"] = "Server=localhost;Database=matrika_crm;User=avnadmin;",
+        ["Jwt:Key"] = "12345678901234567890123456789012",
+        ["Security:EncryptionKeyHex"] = "cd7231927bf2c9c977acd8922d1c4231a21dac5b0d1a124062cd3d831b114d40"
+    }).Build();
+    await ProductionSetup.Run(fakeSp, cNoDbPass, env, Array.Empty<string>());
+} catch (InvalidOperationException ex) when (ex.Message.Contains("Missing database password")) {
+    threw = true;
+}
+Assert(threw, "Bootstrap: Refusal when database password is missing from connection string and environment");
+
+// 15. Regression test: DbService and ProductionSetup resolve password directly from Environment variables
+var envSpecialPass = @"Env;Special=P@ss""with'quotes\and;semi=colons";
+Environment.SetEnvironmentVariable("Production__DatabasePassword", envSpecialPass);
+
+var configWithoutPass = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+    ["ConnectionStrings:DefaultConnection"] = "Server=mysql-xxx.aivencloud.com;Port=15000;Database=matrika_crm;User=avnadmin;SslMode=Required;"
+}).Build();
+
+var dbServiceFromEnv = new DbService(configWithoutPass, NullLogger<DbService>.Instance);
+using (var testConn = dbServiceFromEnv.CreateConnection())
+{
+    var roundtrip = new MySqlConnectionStringBuilder(testConn.ConnectionString);
+    Assert(roundtrip.Password == envSpecialPass, "DbService: Resolves Production__DatabasePassword directly from Environment variable");
+}
+
+// 16. Fallback to Matrika__DatabasePassword in environment
+Environment.SetEnvironmentVariable("Production__DatabasePassword", null);
+Environment.SetEnvironmentVariable("Matrika__DatabasePassword", "MatrikaEnvPass123!");
+var dbServiceFromMatrikaEnv = new DbService(configWithoutPass, NullLogger<DbService>.Instance);
+using (var testConn = dbServiceFromMatrikaEnv.CreateConnection())
+{
+    var roundtrip = new MySqlConnectionStringBuilder(testConn.ConnectionString);
+    Assert(roundtrip.Password == "MatrikaEnvPass123!", "DbService: Resolves Matrika__DatabasePassword directly from Environment variable");
+}
+
+// 17. Fallback to DB_PASSWORD in environment
+Environment.SetEnvironmentVariable("Matrika__DatabasePassword", null);
+Environment.SetEnvironmentVariable("DB_PASSWORD", "DbPassEnv789!");
+var dbServiceFromDbPassword = new DbService(configWithoutPass, NullLogger<DbService>.Instance);
+using (var testConn = dbServiceFromDbPassword.CreateConnection())
+{
+    var roundtrip = new MySqlConnectionStringBuilder(testConn.ConnectionString);
+    Assert(roundtrip.Password == "DbPassEnv789!", "DbService: Resolves DB_PASSWORD directly from Environment variable");
+}
+
+// Clean up test environment variables
+Environment.SetEnvironmentVariable("DB_PASSWORD", null);
+Environment.SetEnvironmentVariable("Production__DatabasePassword", null);
+Environment.SetEnvironmentVariable("Matrika__DatabasePassword", null);
 
 Console.WriteLine($"{passed} checks passed.");
 

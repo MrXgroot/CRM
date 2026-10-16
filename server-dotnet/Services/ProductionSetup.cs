@@ -104,19 +104,33 @@ public static class ProductionSetup
 
             var builder = new MySqlConnectionStringBuilder(rawConnStr);
 
+            if (Regex.IsMatch(builder.Database ?? "", @"\b(act[-_]base|hms[-_]dev)\b", RegexOptions.IgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "FATAL SAFETY ABORT: Database connection string points to a protected or forbidden database name. Bootstrap is strictly prohibited from running against this database.");
+            }
+
             var dbPassword = config["Production:DatabasePassword"]
+                ?? config["Production__DatabasePassword"]
                 ?? config["Matrika:DatabasePassword"]
-                ?? config["DB_PASSWORD"];
+                ?? config["Matrika__DatabasePassword"]
+                ?? config["DB_PASSWORD"]
+                ?? config["DatabasePassword"]
+                ?? Environment.GetEnvironmentVariable("Production__DatabasePassword")
+                ?? Environment.GetEnvironmentVariable("Matrika__DatabasePassword")
+                ?? Environment.GetEnvironmentVariable("DB_PASSWORD")
+                ?? Environment.GetEnvironmentVariable("Production:DatabasePassword")
+                ?? Environment.GetEnvironmentVariable("DatabasePassword");
 
             if (!string.IsNullOrEmpty(dbPassword))
             {
                 builder.Password = dbPassword;
             }
 
-            if (Regex.IsMatch(builder.Database ?? "", @"\b(act[-_]base|hms[-_]dev)\b", RegexOptions.IgnoreCase))
+            if (string.IsNullOrWhiteSpace(builder.Password))
             {
                 throw new InvalidOperationException(
-                    "FATAL SAFETY ABORT: Database connection string points to a protected or forbidden database name. Bootstrap is strictly prohibited from running against this database.");
+                    "ABORT: Missing database password. Provide it via 'Production__DatabasePassword', 'Matrika__DatabasePassword', or 'DB_PASSWORD' environment variable.");
             }
 
             await using var conn = new MySqlConnection(builder.ConnectionString);

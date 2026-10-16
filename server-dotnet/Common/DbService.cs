@@ -27,8 +27,16 @@ public class DbService : IDbService
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
         var dbPassword = configuration["Production:DatabasePassword"]
+            ?? configuration["Production__DatabasePassword"]
             ?? configuration["Matrika:DatabasePassword"]
-            ?? configuration["DB_PASSWORD"];
+            ?? configuration["Matrika__DatabasePassword"]
+            ?? configuration["DB_PASSWORD"]
+            ?? configuration["DatabasePassword"]
+            ?? Environment.GetEnvironmentVariable("Production__DatabasePassword")
+            ?? Environment.GetEnvironmentVariable("Matrika__DatabasePassword")
+            ?? Environment.GetEnvironmentVariable("DB_PASSWORD")
+            ?? Environment.GetEnvironmentVariable("Production:DatabasePassword")
+            ?? Environment.GetEnvironmentVariable("DatabasePassword");
 
         if (!string.IsNullOrEmpty(dbPassword))
         {

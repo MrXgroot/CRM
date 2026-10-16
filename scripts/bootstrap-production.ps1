@@ -92,10 +92,12 @@ try {
     $env:Production__ExpectedDatabase = $ExpectedDatabase
     $env:ConnectionStrings__DefaultConnection = "$cleanConn;"
     $env:Production__DatabasePassword = $dbPassword
+    $env:Matrika__DatabasePassword = $dbPassword
+    $env:DB_PASSWORD = $dbPassword
     $env:Matrika__ConfirmProductionBootstrap = "true"
 
     Write-Host "`nInvoking production bootstrap workflow with safety guardrails..." -ForegroundColor Cyan
-    dotnet run --project "$PSScriptRoot/../server-dotnet/Matrika.Api.csproj" -- --init-prod --confirm-production-bootstrap
+    dotnet run --project "$PSScriptRoot/../server-dotnet/Matrika.Api.csproj" --no-launch-profile -- --init-prod --confirm-production-bootstrap
 
     if ($LASTEXITCODE -ne 0) {
         throw "Bootstrap process exited with an error code ($LASTEXITCODE). Review output above."
@@ -110,6 +112,8 @@ finally {
     }
     Remove-Item Env:Matrika__AdminPassword -ErrorAction SilentlyContinue
     Remove-Item Env:Production__DatabasePassword -ErrorAction SilentlyContinue
+    Remove-Item Env:Matrika__DatabasePassword -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
     Remove-Item Env:Matrika__ConfirmProductionBootstrap -ErrorAction SilentlyContinue
     Remove-Item Env:ConnectionStrings__DefaultConnection -ErrorAction SilentlyContinue
 }
