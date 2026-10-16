@@ -68,6 +68,11 @@ if (args.Contains("--seed-dev") || args.Contains("--seed-local")) {
     await DevSeeder.Run(scope.ServiceProvider, builder.Configuration, app.Environment);
     return;
 }
+if (args.Contains("--init-prod") || args.Contains("--init-production") || args.Contains("--bootstrap-production")) {
+    using var scope = app.Services.CreateScope();
+    await ProductionSetup.Run(scope.ServiceProvider, builder.Configuration, app.Environment, args);
+    return;
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

@@ -63,11 +63,17 @@ public static class DevSeeder
         Console.WriteLine($"[DevSeeder] Verified target database: {connection.Database}");
         Console.WriteLine($"[DevSeeder] Entity: {entity.name} (ID: 1), Branch: {branch.name} (ID: 1), User ID: 1");
 
-        // 2. Ensure seed_tag columns exist
-        await connection.ExecuteAsync("ALTER TABLE crm_customers ADD COLUMN IF NOT EXISTS seed_tag VARCHAR(64) NULL;");
-        await connection.ExecuteAsync("ALTER TABLE crm_leads ADD COLUMN IF NOT EXISTS seed_tag VARCHAR(64) NULL;");
-        await connection.ExecuteAsync("ALTER TABLE crm_deals ADD COLUMN IF NOT EXISTS seed_tag VARCHAR(64) NULL;");
-        await connection.ExecuteAsync("ALTER TABLE crm_activities ADD COLUMN IF NOT EXISTS seed_tag VARCHAR(64) NULL;");
+        // 2. Ensure seed_tag columns exist (compatible with MySQL 8.4 and MariaDB)
+        foreach (var tbl in new[] { "crm_customers", "crm_leads", "crm_deals", "crm_activities" })
+        {
+            var colCount = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @tbl AND COLUMN_NAME = 'seed_tag'",
+                new { tbl });
+            if (colCount == 0)
+            {
+                await connection.ExecuteAsync($"ALTER TABLE `{tbl}` ADD COLUMN `seed_tag` VARCHAR(64) NULL;");
+            }
+        }
 
         const long entityId = 1L;
         const long branchId = 1L;
