@@ -1,0 +1,43 @@
+/* .input-field {
+    padding: 10px;
+    position: relative;
+    width: 100%;
+  }*/
+
+  .input-field label{
+    color: #1e1e1e;
+    font-size: 14px;
+    font-weight: 400;
+    margin-left: 5px;
+  }
+  
+  /*.input-field input {
+    background: none;
+    border: 1px solid #9e9e9e;
+    border-radius:5px;
+    color: #333;
+    font-size: 18px;
+    font-weight: 400;
+    height: 50px;
+    line-height: 1;
+    outline: none;
+    padding: 10px;
+    width: 100%;
+  } */
+
+  .was-validated-by-ryal  .input-field input:invalid ,
+    .was-validated-by-ryal .drag-drop-area:has(input:invalid)  {
+    background-color: rgb(255, 242, 242);
+    border: 1px solid rgb(253, 140, 140);
+  }
+
+  .was-validated-by-ryal .input-field input:invalid~.error_icon{
+    display: block;
+  }
+
+  
+  
+  .input-field input::placeholder {
+    color: #c8c8c8;
+    font-weight: 400;
+  }

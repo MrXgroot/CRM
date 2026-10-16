@@ -1,0 +1,11 @@
+.freebuff
+**/node_modules/
+**/dist/
+**/bin/
+**/obj/
+.env
+.env.*
+!.env.example
+*.user
+playwright-report/
+test-results/

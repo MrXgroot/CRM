@@ -1,0 +1,23 @@
+.customModel_wrapper{
+    animation: modalAni .4s linear forwards;
+}
+
+@keyframes modalAni {
+    from{
+        opacity: 0;
+    } to{
+        opacity: 1;
+    }
+}
+
+
+@media (min-width: 1024px) {
+    .smallModal{
+        max-width: 30% !important;
+        min-width: 30% !important;
+        width: 30% !important;
+      }
+}
+
+
+  

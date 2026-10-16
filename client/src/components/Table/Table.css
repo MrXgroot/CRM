@@ -1,0 +1,41 @@
+.TableComp thead{
+    background-color: #f3f4f6;
+    text-align: left;
+}
+
+.TableComp tr:hover{
+    background: #f8fafc;
+}
+
+.TableComp td{
+    border-bottom-width: 0px;
+    border-color: #e5e7eb;
+    border-top-width: 1px;
+    font-weight: 500;
+    padding: 5px 5px 5px 15px;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.TableComp th{
+    color: #111827;
+    font-weight: 600;
+    padding: 10px 5px 10px 15px;
+    text-align: left;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+@media (max-width: 1023px) {
+    .modalTable .tableOverflowContainer{
+        max-width: 80vw;
+    }
+}
+
+/* Symmetric cell padding so centered content (e.g. access checkboxes)
+   aligns on the true column center instead of the content box center. */
+.TableComp.accessTable th,
+.TableComp.accessTable td{
+    padding-left: 10px;
+    padding-right: 10px;
+}

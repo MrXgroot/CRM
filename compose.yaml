@@ -1,0 +1,38 @@
+# Local development only. Bindings are limited to this computer.
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: matrika_crm
+      MARIADB_USER: matrika
+      MARIADB_PASSWORD: ${LOCAL_DB_PASSWORD:?Run scripts/configure-local.ps1 first}
+      MARIADB_ROOT_PASSWORD: ${LOCAL_DB_ROOT_PASSWORD:?Run scripts/configure-local.ps1 first}
+    volumes:
+      - matrika_database:/var/lib/mysql
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  api:
+    build: ./server-dotnet
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:5007
+      ConnectionStrings__DefaultConnection: Server=db;Database=matrika_crm;User=matrika;Password=${LOCAL_DB_PASSWORD}
+      Jwt__Key: ${LOCAL_JWT_KEY:?Run scripts/configure-local.ps1 first}
+      Security__EncryptionKeyHex: ${LOCAL_ENCRYPTION_KEY:?Run scripts/configure-local.ps1 first}
+      Matrika__AdminEmail: ${Matrika__AdminEmail:-matrika843@gmail.com}
+      Matrika__AdminPassword: ${Matrika__AdminPassword:?Run scripts/configure-local.ps1 first}
+    ports: ["127.0.0.1:5007:5007"]
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./client
+    environment:
+      VITE_BACKEND_URL: http://localhost:5007
+    ports: ["127.0.0.1:5173:5173"]
+    depends_on: [api]
+volumes:
+  matrika_database:
