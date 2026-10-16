@@ -22,6 +22,11 @@ public class CrmController : ControllerBase
         var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "user_id")?.Value;
 
         var entityId = long.TryParse(entityIdClaim, out var eid) ? eid : 0;
+        if (entityId == 0)
+        {
+            var userEntityClaim = User.Claims.FirstOrDefault(c => c.Type == "entity_id")?.Value;
+            if (long.TryParse(userEntityClaim, out var ueid)) entityId = ueid;
+        }
         long? branchId = long.TryParse(branchIdHeader, out var bid) && bid > 0 ? bid : null;
         var userId = long.TryParse(userIdClaim, out var uid) ? uid : 0;
 

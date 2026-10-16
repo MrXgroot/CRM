@@ -148,6 +148,7 @@ export default function DealsPage() {
       const payload = {
         ...formData,
         amount: Number(formData.amount) || 0,
+        expected_close_date: formData.expected_close_date ? formData.expected_close_date : null,
         customer_id: formData.customer_id ? Number(formData.customer_id) : null,
         assigned_to: formData.assigned_to ? Number(formData.assigned_to) : null,
         branch_id: formData.branch_id ? Number(formData.branch_id) : null

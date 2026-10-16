@@ -63,6 +63,11 @@ if (args.Contains("--setup-matrika")) {
     await MatrikaSetup.Run(scope.ServiceProvider, builder.Configuration);
     return;
 }
+if (args.Contains("--seed-dev") || args.Contains("--seed-local")) {
+    using var scope = app.Services.CreateScope();
+    await DevSeeder.Run(scope.ServiceProvider, builder.Configuration, app.Environment);
+    return;
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

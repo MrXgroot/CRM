@@ -1,4 +1,4 @@
-// Legacy transport endpoints remain available; their UI modules are not part of this CRM.
+﻿// Legacy transport endpoints remain available; their UI modules are not part of this CRM.
 type LegacyPayload = object;
 import { AxiosResponse } from "axios";
 import { APISuccessResponseInterface} from ".";
@@ -359,7 +359,7 @@ export const UpdateBranch = ({ entity_id, branch_id, name, branch_incharge_name,
 };
 
 export const getBranchByEntity = () => {
-  return axios.get("/branch/getBranchByEntity");
+  return axios.get("/branch");
 };
 
 export const AddBranch = (data: branchModel) => {
@@ -1077,3 +1077,4 @@ export const UpdateGeneralSettings = (formData: FormData) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
+

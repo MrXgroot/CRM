@@ -43,10 +43,97 @@ public interface ICrmRepository
 public class CrmRepository : ICrmRepository
 {
     private readonly IDbService _db;
+    private readonly IEncryptionService? _encryption;
 
-    public CrmRepository(IDbService db)
+    public CrmRepository(IDbService db, IEncryptionService? encryption = null)
     {
         _db = db;
+        _encryption = encryption;
+    }
+
+    private IEnumerable<dynamic> DecryptList(IEnumerable<dynamic> rows, params string[] fields)
+    {
+        if (_encryption == null) return rows;
+        var list = new List<dynamic>();
+        foreach (var item in rows)
+        {
+            list.Add(DecryptItem(item, fields)!);
+        }
+        return list;
+    }
+
+    private dynamic? DecryptItem(dynamic? item, params string[] fields)
+    {
+        if (item == null || _encryption == null) return item;
+        if (item is not IDictionary<string, object?> dictSource) return item;
+        var dict = new Dictionary<string, object?>(dictSource);
+        foreach (var f in fields)
+        {
+            if (dict.TryGetValue(f, out var val) && val is string str && !string.IsNullOrWhiteSpace(str))
+            {
+                dict[f] = _encryption.Decrypt(str);
+            }
+        }
+        return dict;
+    }
+
+    private static void SanitizeCustomerData(IDictionary<string, object?> data)
+    {
+        if (data.TryGetValue("assigned_to", out var a) && (a == null || string.IsNullOrWhiteSpace(a.ToString()) || a.ToString() == "0"))
+            data["assigned_to"] = null;
+        if (data.TryGetValue("branch_id", out var b) && (b == null || string.IsNullOrWhiteSpace(b.ToString()) || b.ToString() == "0"))
+            data["branch_id"] = null;
+    }
+
+    private static void SanitizeLeadData(IDictionary<string, object?> data)
+    {
+        if (data.TryGetValue("assigned_to", out var a) && (a == null || string.IsNullOrWhiteSpace(a.ToString()) || a.ToString() == "0"))
+            data["assigned_to"] = null;
+        if (data.TryGetValue("branch_id", out var b) && (b == null || string.IsNullOrWhiteSpace(b.ToString()) || b.ToString() == "0"))
+            data["branch_id"] = null;
+        if (data.TryGetValue("estimated_value", out var ev) && (ev == null || string.IsNullOrWhiteSpace(ev.ToString())))
+            data["estimated_value"] = 0;
+    }
+
+    private static void SanitizeDealData(IDictionary<string, object?> data)
+    {
+        if (data.TryGetValue("expected_close_date", out var d) && (d == null || string.IsNullOrWhiteSpace(d.ToString())))
+            data["expected_close_date"] = null;
+        if (data.TryGetValue("customer_id", out var c) && (c == null || string.IsNullOrWhiteSpace(c.ToString()) || c.ToString() == "0"))
+            data["customer_id"] = null;
+        if (data.TryGetValue("lead_id", out var l) && (l == null || string.IsNullOrWhiteSpace(l.ToString()) || l.ToString() == "0"))
+            data["lead_id"] = null;
+        if (data.TryGetValue("assigned_to", out var a) && (a == null || string.IsNullOrWhiteSpace(a.ToString()) || a.ToString() == "0"))
+            data["assigned_to"] = null;
+        if (data.TryGetValue("branch_id", out var b) && (b == null || string.IsNullOrWhiteSpace(b.ToString()) || b.ToString() == "0"))
+            data["branch_id"] = null;
+        if (data.TryGetValue("approved_by", out var ap) && (ap == null || string.IsNullOrWhiteSpace(ap.ToString()) || ap.ToString() == "0"))
+            data["approved_by"] = null;
+    }
+
+    private static void SanitizeActivityData(IDictionary<string, object?> data)
+    {
+        if (data.TryGetValue("due_date", out var d) && (d == null || string.IsNullOrWhiteSpace(d.ToString())))
+            data["due_date"] = null;
+        if (data.TryGetValue("related_to_id", out var r) && (r == null || string.IsNullOrWhiteSpace(r.ToString()) || r.ToString() == "0"))
+            data["related_to_id"] = null;
+        if (data.TryGetValue("assigned_to", out var a) && (a == null || string.IsNullOrWhiteSpace(a.ToString()) || a.ToString() == "0"))
+            data["assigned_to"] = null;
+        if (data.TryGetValue("branch_id", out var b) && (b == null || string.IsNullOrWhiteSpace(b.ToString()) || b.ToString() == "0"))
+            data["branch_id"] = null;
+    }
+
+    private async Task SyncCustomerRevenueAsync(long? customerId, long entityId)
+    {
+        if (customerId.HasValue && customerId.Value > 0)
+        {
+            await _db.ExecuteAsync(@"
+                UPDATE crm_customers 
+                SET total_revenue = (SELECT IFNULL(SUM(amount), 0) FROM crm_deals WHERE entity_id = @entityId AND customer_id = @customerId AND status = 'Won')
+                WHERE entity_id = @entityId AND customer_id = @customerId",
+                new { customerId = customerId.Value, entityId }
+            );
+        }
     }
 
     // ================= CUSTOMERS =================
@@ -81,7 +168,8 @@ public class CrmRepository : ICrmRepository
         }
 
         sql += " ORDER BY c.customer_id DESC";
-        return await _db.QueryAsync<dynamic>(sql, p);
+        var rows = await _db.QueryAsync<dynamic>(sql, p);
+        return DecryptList(rows, "assigned_user_name");
     }
 
     public async Task<dynamic?> GetCustomerByIdAsync(long customerId, long entityId)
@@ -93,11 +181,13 @@ public class CrmRepository : ICrmRepository
             LEFT JOIN users u ON u.user_id = c.assigned_to AND u.entity_id = c.entity_id
             WHERE c.customer_id = @customerId AND c.entity_id = @entityId";
 
-        return await _db.QuerySingleOrDefaultAsync<dynamic>(sql, new { customerId, entityId });
+        var row = await _db.QuerySingleOrDefaultAsync<dynamic>(sql, new { customerId, entityId });
+        return DecryptItem(row, "assigned_user_name");
     }
 
     public async Task<long> AddCustomerAsync(IDictionary<string, object?> data, long entityId, long? branchId, long crBy)
     {
+        SanitizeCustomerData(data);
         var nextId = await _db.GetIdAsync("crm_customers", "customer_id", new Dictionary<string, object?> { ["entity_id"] = entityId });
 
         var insertData = new Dictionary<string, object?>(data)
@@ -116,6 +206,7 @@ public class CrmRepository : ICrmRepository
 
     public async Task<bool> UpdateCustomerAsync(long customerId, IDictionary<string, object?> data, long entityId, long moBy)
     {
+        SanitizeCustomerData(data);
         var updateData = new Dictionary<string, object?>(data)
         {
             ["mo_by"] = moBy,
@@ -174,7 +265,8 @@ public class CrmRepository : ICrmRepository
         }
 
         sql += " ORDER BY l.lead_id DESC";
-        return await _db.QueryAsync<dynamic>(sql, p);
+        var rows = await _db.QueryAsync<dynamic>(sql, p);
+        return DecryptList(rows, "assigned_user_name");
     }
 
     public async Task<dynamic?> GetLeadByIdAsync(long leadId, long entityId)
@@ -186,11 +278,13 @@ public class CrmRepository : ICrmRepository
             LEFT JOIN users u ON u.user_id = l.assigned_to AND u.entity_id = l.entity_id
             WHERE l.lead_id = @leadId AND l.entity_id = @entityId";
 
-        return await _db.QuerySingleOrDefaultAsync<dynamic>(sql, new { leadId, entityId });
+        var row = await _db.QuerySingleOrDefaultAsync<dynamic>(sql, new { leadId, entityId });
+        return DecryptItem(row, "assigned_user_name");
     }
 
     public async Task<long> AddLeadAsync(IDictionary<string, object?> data, long entityId, long? branchId, long crBy)
     {
+        SanitizeLeadData(data);
         var nextId = await _db.GetIdAsync("crm_leads", "lead_id", new Dictionary<string, object?> { ["entity_id"] = entityId });
 
         var insertData = new Dictionary<string, object?>(data)
@@ -209,6 +303,7 @@ public class CrmRepository : ICrmRepository
 
     public async Task<bool> UpdateLeadAsync(long leadId, IDictionary<string, object?> data, long entityId, long moBy)
     {
+        SanitizeLeadData(data);
         var updateData = new Dictionary<string, object?>(data)
         {
             ["mo_by"] = moBy,
@@ -247,6 +342,12 @@ public class CrmRepository : ICrmRepository
         var contactName = $"{firstName} {lastName}".Trim();
         if (string.IsNullOrWhiteSpace(companyName)) companyName = contactName;
 
+        long? targetBranchId = branchId;
+        if (leadDict.ContainsKey("branch_id") && leadDict["branch_id"] != null && long.TryParse(leadDict["branch_id"]?.ToString(), out var parsedBid) && parsedBid > 0)
+        {
+            targetBranchId = parsedBid;
+        }
+
         // 1. Create customer
         var customerData = new Dictionary<string, object?>
         {
@@ -256,9 +357,10 @@ public class CrmRepository : ICrmRepository
             ["phone"] = leadDict["phone"],
             ["status"] = "Active",
             ["assigned_to"] = leadDict["assigned_to"],
+            ["branch_id"] = targetBranchId,
             ["notes"] = $"Converted from Lead #{leadId}. " + (leadDict["notes"] ?? "")
         };
-        var customerId = await AddCustomerAsync(customerData, entityId, branchId, userId);
+        var customerId = await AddCustomerAsync(customerData, entityId, targetBranchId, userId);
 
         // 2. Create deal if estimated value > 0
         long? dealId = null;
@@ -270,13 +372,14 @@ public class CrmRepository : ICrmRepository
                 ["deal_name"] = $"{companyName} - Deal",
                 ["customer_id"] = customerId,
                 ["lead_id"] = leadId,
+                ["branch_id"] = targetBranchId,
                 ["stage"] = "Proposal Sent",
                 ["amount"] = estValue,
                 ["probability"] = 60,
                 ["status"] = "Open",
                 ["assigned_to"] = leadDict["assigned_to"]
             };
-            dealId = await AddDealAsync(dealData, entityId, branchId, userId);
+            dealId = await AddDealAsync(dealData, entityId, targetBranchId, userId);
         }
 
         // 3. Update lead status to Converted
@@ -329,7 +432,8 @@ public class CrmRepository : ICrmRepository
         }
 
         sql += " ORDER BY d.deal_id DESC";
-        return await _db.QueryAsync<dynamic>(sql, p);
+        var rows = await _db.QueryAsync<dynamic>(sql, p);
+        return DecryptList(rows, "assigned_user_name", "approved_by_name");
     }
 
     public async Task<dynamic?> GetDealByIdAsync(long dealId, long entityId)
@@ -344,11 +448,13 @@ public class CrmRepository : ICrmRepository
             LEFT JOIN users ap ON ap.user_id = d.approved_by AND ap.entity_id = d.entity_id
             WHERE d.deal_id = @dealId AND d.entity_id = @entityId";
 
-        return await _db.QuerySingleOrDefaultAsync<dynamic>(sql, new { dealId, entityId });
+        var row = await _db.QuerySingleOrDefaultAsync<dynamic>(sql, new { dealId, entityId });
+        return DecryptItem(row, "assigned_user_name", "approved_by_name");
     }
 
     public async Task<long> AddDealAsync(IDictionary<string, object?> data, long entityId, long? branchId, long crBy)
     {
+        SanitizeDealData(data);
         var nextId = await _db.GetIdAsync("crm_deals", "deal_id", new Dictionary<string, object?> { ["entity_id"] = entityId });
 
         var insertData = new Dictionary<string, object?>(data)
@@ -362,11 +468,18 @@ public class CrmRepository : ICrmRepository
 
         var skip = new[] { "company_name", "contact_name", "branch_name", "assigned_user_name", "approved_by_name" };
         await _db.InsertTableAsync("crm_deals", insertData, skip);
+
+        if (insertData.TryGetValue("customer_id", out var cid) && cid != null && long.TryParse(cid.ToString(), out var parsedCid))
+        {
+            await SyncCustomerRevenueAsync(parsedCid, entityId);
+        }
+
         return nextId;
     }
 
     public async Task<bool> UpdateDealAsync(long dealId, IDictionary<string, object?> data, long entityId, long moBy)
     {
+        SanitizeDealData(data);
         var updateData = new Dictionary<string, object?>(data)
         {
             ["mo_by"] = moBy,
@@ -381,15 +494,43 @@ public class CrmRepository : ICrmRepository
         };
 
         var rows = await _db.UpdateTableAsync("crm_deals", updateData, where, skip);
+
+        var deal = await GetDealByIdAsync(dealId, entityId);
+        if (deal != null)
+        {
+            var dealDict = (IDictionary<string, object?>)deal;
+            if (dealDict.TryGetValue("customer_id", out var cid) && cid != null && long.TryParse(cid.ToString(), out var parsedCid))
+            {
+                await SyncCustomerRevenueAsync(parsedCid, entityId);
+            }
+        }
+
         return rows > 0;
     }
 
     public async Task<bool> DeleteDealAsync(long dealId, long entityId)
     {
+        var deal = await GetDealByIdAsync(dealId, entityId);
+        long? custId = null;
+        if (deal != null)
+        {
+            var dealDict = (IDictionary<string, object?>)deal;
+            if (dealDict.TryGetValue("customer_id", out var c) && c != null && long.TryParse(c.ToString(), out var parsedCid))
+            {
+                custId = parsedCid;
+            }
+        }
+
         var rows = await _db.ExecuteAsync(
             "DELETE FROM crm_deals WHERE deal_id = @dealId AND entity_id = @entityId",
             new { dealId, entityId }
         );
+
+        if (custId.HasValue)
+        {
+            await SyncCustomerRevenueAsync(custId.Value, entityId);
+        }
+
         return rows > 0;
     }
 
@@ -415,23 +556,14 @@ public class CrmRepository : ICrmRepository
             new { stage, probability, status, moBy, dealId, entityId }
         );
 
-        if (status == "Won")
+        // Always sync customer total revenue
+        var deal = await GetDealByIdAsync(dealId, entityId);
+        if (deal != null)
         {
-            // Sync customer total revenue
-            var deal = await GetDealByIdAsync(dealId, entityId);
-            if (deal != null)
+            var dealDict = (IDictionary<string, object?>)deal;
+            if (dealDict.TryGetValue("customer_id", out var cid) && cid != null && long.TryParse(cid.ToString(), out var parsedCid))
             {
-                var dealDict = (IDictionary<string, object?>)deal;
-                var custId = dealDict["customer_id"];
-                if (custId != null)
-                {
-                    await _db.ExecuteAsync(@"
-                        UPDATE crm_customers 
-                        SET total_revenue = (SELECT IFNULL(SUM(amount), 0) FROM crm_deals WHERE entity_id = @entityId AND customer_id = @custId AND status = 'Won')
-                        WHERE entity_id = @entityId AND customer_id = @custId",
-                        new { custId, entityId }
-                    );
-                }
+                await SyncCustomerRevenueAsync(parsedCid, entityId);
             }
         }
 
@@ -487,11 +619,13 @@ public class CrmRepository : ICrmRepository
         }
 
         sql += " ORDER BY a.due_date ASC, a.activity_id DESC";
-        return await _db.QueryAsync<dynamic>(sql, p);
+        var rows = await _db.QueryAsync<dynamic>(sql, p);
+        return DecryptList(rows, "assigned_user_name");
     }
 
     public async Task<long> AddActivityAsync(IDictionary<string, object?> data, long entityId, long? branchId, long crBy)
     {
+        SanitizeActivityData(data);
         var nextId = await _db.GetIdAsync("crm_activities", "activity_id", new Dictionary<string, object?> { ["entity_id"] = entityId });
 
         var insertData = new Dictionary<string, object?>(data)
@@ -510,6 +644,7 @@ public class CrmRepository : ICrmRepository
 
     public async Task<bool> UpdateActivityAsync(long activityId, IDictionary<string, object?> data, long entityId, long moBy)
     {
+        SanitizeActivityData(data);
         var updateData = new Dictionary<string, object?>(data)
         {
             ["mo_by"] = moBy,

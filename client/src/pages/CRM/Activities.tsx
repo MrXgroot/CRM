@@ -123,6 +123,7 @@ export default function ActivitiesPage() {
     try {
       const payload = {
         ...formData,
+        due_date: formData.due_date ? formData.due_date : null,
         assigned_to: formData.assigned_to ? Number(formData.assigned_to) : null,
         branch_id: formData.branch_id ? Number(formData.branch_id) : null
       };
