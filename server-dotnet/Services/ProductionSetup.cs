@@ -110,18 +110,13 @@ public static class ProductionSetup
                     "FATAL SAFETY ABORT: Database connection string points to a protected or forbidden database name. Bootstrap is strictly prohibited from running against this database.");
             }
 
-            var dbPassword = config["Production:DatabasePassword"]
-                ?? config["Production__DatabasePassword"]
-                ?? config["Matrika:DatabasePassword"]
-                ?? config["Matrika__DatabasePassword"]
-                ?? config["DB_PASSWORD"]
-                ?? config["DatabasePassword"]
-                ?? Environment.GetEnvironmentVariable("Production__DatabasePassword")
-                ?? Environment.GetEnvironmentVariable("Matrika__DatabasePassword")
-                ?? Environment.GetEnvironmentVariable("DB_PASSWORD")
-                ?? Environment.GetEnvironmentVariable("Production:DatabasePassword")
-                ?? Environment.GetEnvironmentVariable("DatabasePassword");
-
+         var dbPassword =
+    Environment.GetEnvironmentVariable("Production__DatabasePassword")
+    ?? Environment.GetEnvironmentVariable("Matrika__DatabasePassword")
+    ?? Environment.GetEnvironmentVariable("DB_PASSWORD")
+    ?? config["Production:DatabasePassword"]
+    ?? config["Matrika:DatabasePassword"]
+    ?? config["DatabasePassword"];
             if (!string.IsNullOrEmpty(dbPassword))
             {
                 builder.Password = dbPassword;
@@ -133,9 +128,16 @@ public static class ProductionSetup
                     "ABORT: Missing database password. Provide it via 'Production__DatabasePassword', 'Matrika__DatabasePassword', or 'DB_PASSWORD' environment variable.");
             }
 
-            await using var conn = new MySqlConnection(builder.ConnectionString);
-            await conn.OpenAsync();
+          Console.WriteLine($"[DB DEBUG] Host: {builder.Server}");
+Console.WriteLine($"[DB DEBUG] Port: {builder.Port}");
+Console.WriteLine($"[DB DEBUG] Database: {builder.Database}");
+Console.WriteLine($"[DB DEBUG] User: {builder.UserID}");
+Console.WriteLine($"[DB DEBUG] Password present: {!string.IsNullOrEmpty(builder.Password)}");
+Console.WriteLine($"[DB DEBUG] Password length: {builder.Password?.Length ?? 0}");
+Console.WriteLine($"[DB DEBUG] SSL mode: {builder.SslMode}");
 
+await using var conn = new MySqlConnection(builder.ConnectionString);
+await conn.OpenAsync();
             // -------------------------------------------------------------
             // GUARD 4: Target Database Name Verification
             // -------------------------------------------------------------
