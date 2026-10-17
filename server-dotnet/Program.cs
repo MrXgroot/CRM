@@ -25,13 +25,15 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Configure CORS
+// Configure CORS for the production frontend
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("Frontend", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        policy
+            .WithOrigins("https://crm-ivory-theta-53.vercel.app")
+            .AllowAnyMethod()
+            .AllowAnyHeader();
     });
 });
 
@@ -81,9 +83,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAll");
+app.UseRouting();
+app.UseCors("Frontend");
 app.UseRateLimiter();
-
 // Global Exception Handler Middleware
 app.Use(async (context, next) =>
 {
